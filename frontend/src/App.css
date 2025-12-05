@@ -1,0 +1,182 @@
+/* RESET & GLOBAL */
+:root {
+  --bg-dark: #0b0f19;
+  --panel: #111827;
+  --border: #374151;
+  --primary: #3b82f6;
+  --text: #f3f4f6;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-dark);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+.app-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* --- NAV BAR --- */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: rgba(17, 24, 39, 0.8);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-links a {
+  color: #9ca3af;
+  text-decoration: none;
+  margin-left: 20px;
+  font-weight: 600;
+}
+
+/* --- HOME PAGE: TIMELINE (FIXED) --- */
+.timeline-container {
+  display: flex !important; /* Force horizontal layout */
+  flex-direction: row !important;
+  justify-content: space-between;
+  align-items: flex-start;
+  position: relative;
+  margin-top: 4rem;
+  gap: 20px;
+}
+
+/* The connecting line */
+.timeline-line {
+  position: absolute;
+  top: 50px;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: #374151;
+  z-index: 0;
+}
+
+.timeline-line-progress {
+  position: absolute;
+  top: 50px;
+  left: 0;
+  height: 4px;
+  background: var(--primary);
+  z-index: 1;
+  transition: width 1s ease;
+}
+
+/* Individual Steps */
+.edu-step {
+  position: relative;
+  z-index: 2;
+  flex: 1; /* Equal width for all steps */
+  text-align: center;
+  opacity: 0.5;
+  transition: all 0.5s;
+}
+
+.edu-step.active {
+  opacity: 1;
+  transform: translateY(-10px);
+}
+
+.edu-icon-circle {
+  width: 100px;
+  height: 100px;
+  background: var(--bg-dark);
+  border: 4px solid var(--border);
+  border-radius: 50%;
+  margin: 0 auto 1rem auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+}
+
+.edu-step.active .edu-icon-circle {
+  border-color: var(--primary);
+  background: #1e3a8a; /* Dark Blue */
+  box-shadow: 0 0 20px var(--primary);
+}
+
+.edu-detail-box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+  text-align: left;
+  min-height: 180px;
+}
+
+/* --- DEMO PAGE: SPLIT LAYOUT (FIXED) --- */
+.demo-layout {
+  display: grid !important;
+  grid-template-columns: 1fr 400px !important; /* Left takes space, Right fixed 400px */
+  gap: 2rem;
+  height: 80vh;
+  margin-top: 1rem;
+}
+
+/* Left Column: 3 Stacked Boxes */
+.left-column {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between;
+  height: 100%;
+  gap: 1rem;
+}
+
+.box-step {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  flex: 1; /* Each box takes equal height */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.box-step.active {
+  border: 2px solid var(--primary);
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+}
+
+.box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #374151;
+  padding-bottom: 5px;
+}
+
+/* Right Column: Terminal */
+.right-column {
+  height: 100%;
+  overflow: hidden;
+}
+
+.terminal-wrapper {
+  height: 100%;
+  background: black;
+  border: 1px solid #333;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.85rem;
+}
