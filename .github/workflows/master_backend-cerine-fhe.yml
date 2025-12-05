@@ -6,7 +6,7 @@ name: Build and deploy Node.js app to Azure Web App - backend-cerine-fhe
 on:
   push:
     branches:
-      - master
+      - master  # <--- On garde bien MASTER ici
   workflow_dispatch:
 
 jobs:
@@ -23,8 +23,10 @@ jobs:
         with:
           node-version: '20.x'
 
+      # --- CORRECTION 1 : On entre dans le dossier backend ---
       - name: npm install, build, and test
         run: |
+          cd backend
           npm install
           npm run build --if-present
           npm run test --if-present
@@ -51,6 +53,7 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
+          # On garde tes identifiants exacts générés par Azure
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_4363F0F52ED94EF187C8098453522A3C }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_BE5412A2ED8848A38DA317815ECE4355 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_CBD1B70339A0433EB37CF52F2C5CBBDF }}
@@ -61,5 +64,5 @@ jobs:
         with:
           app-name: 'backend-cerine-fhe'
           slot-name: 'Production'
-          package: .
-          
+          # --- CORRECTION 2 : On pointe vers le dossier backend ---
+          package: ./backend
