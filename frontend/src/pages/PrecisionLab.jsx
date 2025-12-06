@@ -27,8 +27,8 @@ export default function PrecisionLab() {
     
     for (const scale of scales) {
       try {
-        // Encrypt value
-        const encrypted = await encryptBatch([testValue]);
+        // Encrypt value with specific scale
+        const encrypted = await encryptBatch([testValue], scale);
         
         // Decrypt and measure error
         const decrypted = await decryptResult(encrypted);

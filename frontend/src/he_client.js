@@ -60,7 +60,7 @@ export async function initSEALAndKeys() {
     }
 }
 
-export function encryptBatch(chunkArray) {
+export function encryptBatch(chunkArray, customScale = null) {
     if (!sealInstance || !encryptor) throw new Error("SEAL not initialized");
 
     const array = Float64Array.from(chunkArray);
@@ -69,7 +69,7 @@ export function encryptBatch(chunkArray) {
     const plain = PlainTextConstructor();
     const cipher = CipherTextConstructor();
     
-    const scale = Math.pow(2, 40);
+    const scale = customScale || Math.pow(2, 40);
 
     ckksEncoder.encode(array, scale, plain);
     encryptor.encrypt(plain, cipher);
