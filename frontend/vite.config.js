@@ -5,7 +5,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 // ⚠️ REMPLACEZ 'nom-de-votre-repo' PAR LE VRAI NOM DE VOTRE DÉPÔT GITHUB
 // Exemple : si votre url est https://chalabi-cerine.github.io/secure-he-app/
 // Alors base doit être '/secure-he-app/'
-const REPO_NAME = "/nom-de-votre-repo/"; 
+const REPO_NAME = "/my-he-project/"; 
 
 export default defineConfig({
   plugins: [
