@@ -33,7 +33,7 @@ export default function PrecisionLab() {
         // Decrypt and measure error
         const decrypted = await decryptResult(encrypted);
         const error = Math.abs(decrypted[0] - testValue);
-        const relativeError = (error / testValue) * 100;
+        const relativeError = testValue !== 0 ? (error / Math.abs(testValue)) * 100 : 0;
         
         testResults.push({
           scale: scale,
@@ -104,7 +104,10 @@ export default function PrecisionLab() {
               type="number"
               step="0.000001"
               value={testValue}
-              onChange={(e) => setTestValue(parseFloat(e.target.value) || 0)}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                setTestValue(isNaN(val) || val === 0 ? 123.456789 : val);
+              }}
               style={{
                 width: '100%',
                 padding: '0.75rem',
@@ -211,7 +214,7 @@ export default function PrecisionLab() {
                   Le compromis optimal dépend de votre cas d'usage et de la précision requise
                 </li>
                 <li>
-                  Une erreur relative &lt; 0.01% est généralement considérée comme excellente
+                  Une erreur relative {'<'} 0.01% est généralement considérée comme excellente
                 </li>
               </ul>
             </div>
