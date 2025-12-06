@@ -7,7 +7,6 @@ import Demo from './pages/Demo';
 import Tools from './pages/Tools';
 import Optimizer from './pages/Optimizer';
 import DataGenerator from './pages/DataGenerator';
-import PrecisionLab from './pages/PrecisionLab';
 // ...
 
 
@@ -28,9 +27,6 @@ export default function App() {
         {/* Outil Spécifique : Optimiseur */}
         <Route path="/optimizer" element={<Optimizer />} />
         <Route path="/generator" element={<DataGenerator />} />
-
-
-          <Route path="/precision-lab" element={<PrecisionLab />} />
       </Routes>
       
 
