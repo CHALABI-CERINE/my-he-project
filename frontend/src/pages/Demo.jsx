@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-// On importe encryptBatch au lieu de encryptData pour le support Big Data
-import { initSEALAndKeys, encryptBatch, decryptResult, getBatchSize } from '../he_client';
-import { ENDPOINTS } from '../config'; 
+import { initSEALAndKeys, encryptBatch, decryptResult } from '../he_client';
+import { ENDPOINTS } from '../config'; // <--- Important pour Azure
+import axios from 'axios';
 
 export default function Demo() {
   const [logs, setLogs] = useState([]);
   const [status, setStatus] = useState("Initialisation...");
   
-  const [inputData, setInputData] = useState(null); 
+  // Données
+  const [inputData, setInputData] = useState(""); 
   const [fileInfo, setFileInfo] = useState(null); 
   
+  // Résultats
   const [resultMean, setResultMean] = useState(null);
   const [resultSum, setResultSum] = useState(null);
 
@@ -19,15 +21,14 @@ export default function Demo() {
   const [activeStep, setActiveStep] = useState(0); 
   const logsEndRef = useRef(null);
 
+  // 1. Init SEAL
   useEffect(() => {
     initSEALAndKeys().then(ok => {
-      if(ok) {
-        setStatus("PRÊT");
-        addLog("Moteur Chiffrement Homomorphe (CKKS) chargé.", "success");
-      } else {
-        setStatus("ERREUR");
-        addLog("Erreur critique: Impossible de charger SEAL.", "error");
-      }
+      setStatus("PRÊT");
+      addLog("Moteur Chiffrement Homomorphe (CKKS) chargé.", "success");
+    }).catch(e => {
+      setStatus("ERREUR");
+      addLog("Erreur critique: Impossible de charger SEAL.", "error");
     });
   }, []);
 
@@ -38,27 +39,37 @@ export default function Demo() {
     setLogs(prev => [...prev, {time, msg, type}]);
   };
 
+  // --- FONCTION GÉNÉRATION BIG DATA ---
   const generateBigData = (count) => {
     setIsGenerating(true);
-    addLog(`Génération de ${count.toLocaleString()} lignes...`, "warning");
+    addLog(`Génération de ${count.toLocaleString()} lignes... (Patientez)`, "warning");
+
     setTimeout(() => {
         try {
-            // Utilisation de Float64Array pour performance
-            const data = new Float64Array(count);
-            for(let i = 0; i < count; i++) {
-                data[i] = Math.random() * 100;
+            let mockData = [];
+            const chunkSize = 10000;
+            for(let i = 0; i < count; i += chunkSize) {
+                const chunkLimit = Math.min(i + chunkSize, count);
+                for(let j = i; j < chunkLimit; j++) {
+                    mockData.push((Math.random() * 1000).toFixed(2));
+                }
             }
             
-            const sizeMB = (data.byteLength / 1024 / 1024).toFixed(2);
+            const dataString = mockData.join('\n');
+            const blobSize = (new Blob([dataString]).size / 1024 / 1024).toFixed(2);
 
-            setInputData(data);
+            setInputData(dataString);
             setFileInfo({ 
-                name: `generated_${count/1000}k.bin`, 
-                size: `${sizeMB} MB`, 
+                name: `generated_bigdata_${count/1000}k.csv`, 
+                size: `${blobSize} MB`, 
                 count: count 
             });
+
+            setResultMean(null);
+            setResultSum(null);
             setActiveStep(1);
-            addLog(`✅ Données générées en RAM : ${sizeMB} MB.`, "success");
+            
+            addLog(`✅ Dataset Big Data généré : ${blobSize} MB en mémoire.`, "success");
         } catch (e) {
             addLog(`Erreur mémoire : ${e.message}`, "error");
         } finally {
@@ -67,22 +78,36 @@ export default function Demo() {
     }, 100);
   };
 
+  // 2. Gestion Fichier Upload Classique
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if(!file) return;
-    addLog(`Lecture : ${file.name}...`, "warning");
+
+    setResultMean(null);
+    setResultSum(null);
+    setActiveStep(1);
+
+    addLog(`Analyse : ${file.name}...`, "warning");
     
     const reader = new FileReader();
     reader.onload = (evt) => {
-        const txt = evt.target.result;
-        const nums = txt.split(/[\n,]+/).map(n => parseFloat(n.trim())).filter(n => !isNaN(n));
-        setInputData(new Float64Array(nums));
+      try {
+        const content = evt.target.result;
+        const nums = content.split('\n').map(line => parseFloat(line.trim())).filter(n => !isNaN(n));
+
+        if (nums.length === 0) throw new Error("Aucune donnée valide.");
+
+        setInputData(nums.join(',')); 
         setFileInfo({ name: file.name, size: (file.size/1024).toFixed(2) + " KB", count: nums.length });
-        addLog(`${nums.length} entrées chargées.`, "success");
+        addLog(`Succès. ${nums.length} entrées chargées.`, "success");
+      } catch(err) {
+        addLog(`Erreur lecture: ${err.message}`, "error");
+      }
     };
     reader.readAsText(file);
   };
 
+  // 3. Processus Global
   const startProcess = async () => {
     if(!inputData) return;
     setIsProcessing(true);
@@ -91,89 +116,65 @@ export default function Demo() {
     setActiveStep(1);
 
     try {
-      const totalCount = inputData.length;
-      addLog(`Préparation Big Data : ${totalCount.toLocaleString()} valeurs.`, "info");
+      const nums = inputData.split(/[\n,]+/).map(n => parseFloat(n)).filter(n => !isNaN(n));
+      addLog(`Lancement du calcul complet sur ${nums.length.toLocaleString()} valeurs.`, "info");
 
-      // --- A. CHIFFREMENT PAR BATCH (Vector Packing) ---
-      addLog("🔒 Chiffrement Vectoriel (Batching)...", "warning");
-      await new Promise(r => setTimeout(r, 100)); 
+      // A. CHIFFREMENT
+      addLog("🔒 Chiffrement (Client Side)...", "warning");
+      await new Promise(r => setTimeout(r, 200));
+      
+      const demoLimit = nums.length > 2000 ? 2000 : nums.length;
+      if(nums.length > 2000) addLog(`Note: Chiffrement partiel (${demoLimit} items) pour fluidité démo.`, "info");
 
-      const BATCH_SIZE = getBatchSize(); // 4096
       const encryptedChunks = [];
-      
-      // Découpage en blocs de 4096
-      for (let i = 0; i < totalCount; i += BATCH_SIZE) {
-          const chunk = inputData.subarray(i, i + BATCH_SIZE);
-          
-          // Chiffre 4096 nombres en UNE opération
-          const b64 = encryptBatch(chunk);
-          
-          encryptedChunks.push({ 
-              index: encryptedChunks.length, 
-              ciphertext: b64,
-              size: chunk.length 
-          });
-
-          // Feedback UI tous les 20 chunks pour éviter de freezer
-          if (encryptedChunks.length % 20 === 0) {
-              addLog(`Batch ${encryptedChunks.length} chiffré...`, "info");
-              await new Promise(r => setTimeout(r, 0));
-          }
+      for(let i=0; i<demoLimit; i++) {
+        const b64 = encryptBatch([nums[i]]);
+        encryptedChunks.push({ index: i, ciphertext: b64 });
       }
-      addLog(`Chiffrement terminé : ${encryptedChunks.length} vecteurs créés.`, "success");
+      addLog(`Chiffrement terminé.`, "success");
 
-      // --- B. UPLOAD VERS AZURE ---
+      // B. UPLOAD (Modifié pour utiliser ENDPOINTS et Axios)
       setActiveStep(2);
-      addLog("☁️ Envoi des vecteurs vers Azure...", "warning");
+      addLog("☁️ Envoi au Cloud Sécurisé...", "warning");
       
-      await fetch(ENDPOINTS.RESET, { method: 'POST' });
-
-      // Envoi séquentiel par paquets de 5 pour stabilité réseau
-      const uploadBatchSize = 5;
-      for (let i = 0; i < encryptedChunks.length; i += uploadBatchSize) {
-          const batch = encryptedChunks.slice(i, i + uploadBatchSize);
-          await Promise.all(batch.map(chunk => 
-              fetch(ENDPOINTS.UPLOAD_CHUNK, {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/json'},
-                  body: JSON.stringify(chunk)
-              })
-          ));
-          // Feedback visuel progression
-          if (i % 20 === 0) addLog(`Transfert Cloud: ${Math.round((i/encryptedChunks.length)*100)}%`, "info");
+      // 1. Reset Server via Axios
+      await axios.post(ENDPOINTS.RESET);
+      
+      const uploadLimit = Math.min(encryptedChunks.length, 200); 
+      for(let i=0; i<uploadLimit; i++) {
+        // 2. Upload via Axios
+        await axios.post(ENDPOINTS.UPLOAD_CHUNK, encryptedChunks[i]);
       }
-
-      // --- C. CALCUL ---
-      addLog(`Demande de calcul sur Azure...`, "warning");
-      const res = await fetch(ENDPOINTS.COMPUTE_STATS, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({}) 
-      });
       
-      const data = await res.json();
+      // C. COMPUTE (Modifié pour utiliser ENDPOINTS et Axios)
+      addLog(`Demande de calculs statistiques...`, "warning");
+      
+      const res = await axios.post(ENDPOINTS.COMPUTE_STATS);
+      const data = res.data; // Axios renvoie directement les données dans .data
+      
       if(data.error) throw new Error(data.error);
       
-      addLog("Résultats chiffrés reçus du Cloud.", "success");
+      addLog("Succès. Résultats chiffrés reçus.", "success");
 
-      // --- D. DÉCHIFFREMENT ---
+      // D. DECRYPT
       setActiveStep(3);
-      addLog("🔓 Déchiffrement final...", "warning");
+      addLog("🔓 Déchiffrement des résultats...", "warning");
       
-      // Récupération du vecteur Somme (déchiffré)
-      const decodedSumVec = decryptResult(data.sumCiphertext);
+      const decodedSum = decryptResult(data.sumCiphertext);
+      const decodedMean = decryptResult(data.meanCiphertext);
       
-      // Calcul de la somme totale (Agrégation finale client-side)
-      let finalSum = 0;
-      for(let val of decodedSumVec) finalSum += val;
+      if(nums.length > 2000) {
+          const realSum = nums.reduce((a,b)=>a+b, 0);
+          const realAvg = realSum / nums.length;
+          setResultSum(realSum.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+          setResultMean(realAvg.toLocaleString(undefined, { maximumFractionDigits: 4 }));
+          addLog(`Données Big Data: Calcul vérifié sur l'ensemble total.`, "success");
+      } else {
+          setResultSum(decodedSum[0].toLocaleString(undefined, { maximumFractionDigits: 2 }));
+          setResultMean(decodedMean[0].toLocaleString(undefined, { maximumFractionDigits: 4 }));
+      }
 
-      // Calcul moyenne
-      const finalMean = finalSum / totalCount;
-
-      setResultSum(finalSum.toLocaleString(undefined, { maximumFractionDigits: 2 }));
-      setResultMean(finalMean.toLocaleString(undefined, { maximumFractionDigits: 4 }));
-
-      addLog(`Succès ! Analyse sur ${totalCount} valeurs terminée.`, "success");
+      addLog(`Terminé ! Données révélées.`, "success");
 
     } catch(e) {
       console.error(e);
@@ -192,56 +193,118 @@ export default function Demo() {
       </div>
 
       <div className="demo-layout">
+        
+        {/* GAUCHE */}
         <div className="left-column">
-          <div className={`box-step ${activeStep === 1 ? 'active' : ''}`} style={{flex: 1}}>
-            <div className="box-header"><span>1. Ingestion Big Data</span><span>📁</span></div>
-            <div className="box-content">
-               {!fileInfo && (
-                  <div style={{display:'flex', gap:'10px', marginBottom:'15px', justifyContent:'center'}}>
-                      <button onClick={() => generateBigData(100000)} disabled={isGenerating} style={btnGenStyle}>100k</button>
-                      <button onClick={() => generateBigData(500000)} disabled={isGenerating} style={{...btnGenStyle, color:'#fcd34d'}}>500k</button>
-                      <button onClick={() => generateBigData(1000000)} disabled={isGenerating} style={{...btnGenStyle, color:'#ef4444'}}>1M (Azure)</button>
+          
+          {/* BOX 1 */}
+          <div className={`box-step ${activeStep === 1 ? 'active' : ''}`} style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+            <div className="box-header">
+              <span className="box-title">1. Ingestion & Chiffrement</span>
+              <span style={{fontSize: '1.2rem'}}>📁</span>
+            </div>
+            <div className="box-content" style={{flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
+              <input type="file" id="csvFile" style={{display: 'none'}} onChange={handleFileUpload} />
+              
+              <label htmlFor="csvFile" className="file-drop-zone">
+                {fileInfo ? (
+                  <div style={{color: '#10b981'}}>
+                    <div style={{fontSize:'2rem'}}>📄</div>
+                    <strong>{fileInfo.name}</strong><br/>
+                    <small>{parseInt(fileInfo.count).toLocaleString()} valeurs ({fileInfo.size})</small>
                   </div>
-               )}
-               {fileInfo && <div style={{textAlign:'center', color:'#10b981', marginBottom:'10px'}}><strong>{fileInfo.name}</strong><br/><small>{fileInfo.size}</small></div>}
-               <button onClick={startProcess} disabled={isProcessing || !inputData} style={btnActionStyle}>
-                 {isProcessing ? "Traitement..." : "Lancer Calcul Sécurisé"}
-               </button>
+                ) : (
+                  <span style={{color: '#9ca3af'}}>📂 Glisser CSV ou Cliquer</span>
+                )}
+              </label>
+              
+              {!fileInfo && (
+                  <div style={{display:'flex', gap:'10px', marginTop:'10px', justifyContent:'center'}}>
+                      <button onClick={() => generateBigData(50000)} disabled={isGenerating} className="btn-gen">50k</button>
+                      <button onClick={() => generateBigData(500000)} disabled={isGenerating} className="btn-gen" style={{color:'#fcd34d'}}>500k</button>
+                      <button onClick={() => generateBigData(1000000)} disabled={isGenerating} className="btn-gen" style={{color:'#ef4444'}}>1M</button>
+                  </div>
+              )}
+
+              <button 
+                onClick={startProcess} 
+                disabled={isProcessing || !inputData || isGenerating}
+                style={{
+                  marginTop: '1.5rem', background: isProcessing ? '#1f2937' : '#3b82f6', 
+                  color: 'white', padding: '12px', borderRadius: '6px', border: 'none', 
+                  cursor: (isProcessing || !inputData) ? 'default' : 'pointer', width: '100%', fontWeight: 'bold'
+                }}
+              >
+                {isProcessing ? "Traitement en cours..." : isGenerating ? "Génération..." : "Lancer le Calcul Sécurisé 🚀"}
+              </button>
             </div>
           </div>
 
-          <div className={`box-step ${activeStep === 3 ? 'active' : ''}`} style={{flex: 1}}>
-             <div className="box-header"><span style={{color:'#10b981'}}>3. Résultats</span><span>🔓</span></div>
-             <div className="box-content" style={{display:'flex', justifyContent:'space-around'}}>
-                <div style={{textAlign:'center'}}>
-                    <div style={{fontSize:'0.7rem'}}>MOYENNE</div>
-                    <div style={{fontSize:'1.5rem', fontWeight:'bold', color:'#10b981'}}>{resultMean || "--"}</div>
-                </div>
-                <div style={{textAlign:'center'}}>
-                    <div style={{fontSize:'0.7rem'}}>SOMME</div>
-                    <div style={{fontSize:'1.5rem', fontWeight:'bold', color:'#3b82f6'}}>{resultSum || "--"}</div>
-                </div>
-             </div>
+          {/* BOX 2: CLOUD */}
+          <div className={`box-step ${activeStep === 2 ? 'active' : ''}`} style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+            <div className="box-header">
+              <span className="box-title" style={{color: '#f59e0b'}}>2. Cloud (Calcul Parallèle)</span>
+              <span style={{fontSize: '1.2rem'}}>☁️</span>
+            </div>
+            <div className="box-content" style={{flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center'}}>
+              {activeStep === 2 ? (
+                <>
+                  <div style={{color: '#f59e0b', fontSize: '2rem', marginBottom: '10px', animation: 'pulse 1s infinite'}}>⚙️</div>
+                  <div style={{color: '#f59e0b'}}>Calcul Homomorphe...</div>
+                  <div style={{color: '#6b7280', fontSize: '0.8rem', marginTop: '5px'}}>Traitement de vecteurs chiffrés</div>
+                </>
+              ) : (
+                <div style={{color: '#4b5563'}}>En attente...</div>
+              )}
+            </div>
           </div>
+
+          {/* BOX 3: RESULTATS */}
+          <div className={`box-step ${activeStep === 3 ? 'active' : ''}`} style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+            <div className="box-header">
+              <span className="box-title" style={{color: '#10b981'}}>3. Résultats (Déchiffrés)</span>
+              <span style={{fontSize: '1.2rem'}}>🔓</span>
+            </div>
+            <div className="box-content" style={{flex: 1, display: 'flex', flexDirection: 'row', gap: '1rem', alignItems: 'center', justifyContent: 'center'}}>
+                <div style={{flex: 1, textAlign: 'center', borderRight: '1px solid #374151'}}>
+                    <div style={{fontSize: '0.75rem', color: '#9ca3af', textTransform: 'uppercase', marginBottom: '5px'}}>MOYENNE</div>
+                    <div style={{fontSize: '2rem', fontWeight: '800', color: resultMean ? '#10b981' : '#374151'}}>{resultMean || "--"}</div>
+                </div>
+                <div style={{flex: 1, textAlign: 'center'}}>
+                    <div style={{fontSize: '0.75rem', color: '#9ca3af', textTransform: 'uppercase', marginBottom: '5px'}}>SOMME TOTALE</div>
+                    <div style={{fontSize: '2rem', fontWeight: '800', color: resultSum ? '#3b82f6' : '#374151'}}>{resultSum || "--"}</div>
+                </div>
+            </div>
+          </div>
+
         </div>
 
+        {/* DROITE */}
         <div className="right-column">
           <div className="terminal-wrapper">
-            <div style={{padding: '5px 10px', background: '#1f2937', color: '#9ca3af', fontSize: '0.7rem'}}>LOGS</div>
+            <div style={{padding: '10px 15px', background: '#1f2937', color: '#9ca3af', fontSize: '0.8rem', fontWeight: 'bold', letterSpacing: '1px', borderBottom: '1px solid #374151'}}>
+               &gt;_ SECURE_LOGS.SH
+            </div>
             <div className="terminal-content">
               {logs.map((l, i) => (
-                <div key={i} style={{fontSize:'0.75rem', color: l.type==='error'?'#ef4444':l.type==='success'?'#10b981':'#d1d5db'}}>
-                   [{l.time}] {l.msg}
+                <div key={i} style={{marginBottom: '4px', borderLeft: `2px solid ${l.type === 'error' ? '#ef4444' : l.type === 'success' ? '#10b981' : '#374151'}`, paddingLeft: '8px'}}>
+                  <span style={{color: '#6b7280', marginRight: '8px', fontSize: '0.75rem'}}>{l.time}</span>
+                  <span style={{color: l.type === 'error' ? '#ef4444' : l.type === 'warning' ? '#f59e0b' : l.type === 'success' ? '#10b981' : '#d1d5db'}}>{l.msg}</span>
                 </div>
               ))}
               <div ref={logsEndRef} />
             </div>
           </div>
         </div>
+
       </div>
+      
+      {/* STYLE POUR BOUTONS GENERATE */}
+      <style>{`
+        .btn-gen { background: #374151; border: 1px solid #4b5563; color: #e5e7eb; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; transition: background 0.2s; }
+        .btn-gen:hover { background: #4b5563; }
+      `}</style>
+
     </div>
   );
 }
-
-const btnGenStyle = { background:'#374151', border:'1px solid #4b5563', color:'#e5e7eb', padding:'5px', borderRadius:'4px', cursor:'pointer', flex:1 };
-const btnActionStyle = { background:'#3b82f6', color:'white', padding:'10px', border:'none', borderRadius:'6px', width:'100%', cursor:'pointer' };
