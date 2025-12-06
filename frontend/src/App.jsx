@@ -13,7 +13,7 @@ import PrecisionLab from './pages/PrecisionLab';
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
   
       <Routes>
         {/* Page d'Accueil (Wizard Pédagogique) */}
