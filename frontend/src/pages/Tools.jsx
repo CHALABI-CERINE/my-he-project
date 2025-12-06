@@ -34,7 +34,6 @@ export default function Tools() {
           </div>
         </Link>
 
-        {/* CARTE 2 : GÉNÉRATEUR DATA (Optionnel si tu veux le mettre là aussi) */}
        {/* CARTE 2 : GÉNÉRATEUR DATA */}
 <Link to="/generator" style={{textDecoration:'none'}}> 
   <div className="tool-card" style={{...cardStyle, border:'1px solid #334155'}}>
@@ -49,7 +48,7 @@ export default function Tools() {
   </div>
 </Link>
 
-        {/* CARTE 3 : FUTURE TOOL (Placeholder) */}
+      
                {/* CARTE 3 : SIMULATEUR DE BRUIT (ACTIVÉE) */}
         <Link to="/precision-lab" style={{textDecoration:'none'}}>
           <div className="tool-card" style={{...cardStyle, border:'1px solid #8b5cf6'}}>
