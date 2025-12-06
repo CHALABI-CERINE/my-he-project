@@ -6,7 +6,7 @@ name: Build and deploy Node.js app to Azure Web App - sandbocckks
 on:
   push:
     branches:
-      - master
+      - master  # <--- On garde bien MASTER ici
   workflow_dispatch:
 
 jobs:
@@ -23,8 +23,10 @@ jobs:
         with:
           node-version: '20.x'
 
+      # --- CORRECTION 1 : On entre dans le dossier backend ---
       - name: npm install, build, and test
         run: |
+          cd backend
           npm install
           npm run build --if-present
           npm run test --if-present
@@ -51,15 +53,16 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_917F71869E534D2AA4F1D464879076A7 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_4305FD4379394823BC5BFC6CD986BD27 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_0E7E88150FA3421897455C795A4B051A }}
+          # On garde tes identifiants exacts générés par Azure
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_4363F0F52ED94EF187C8098453522A3C }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_BE5412A2ED8848A38DA317815ECE4355 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_CBD1B70339A0433EB37CF52F2C5CBBDF }}
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'sandbocckks'
+          app-name: 'backend-cerine-fhe'
           slot-name: 'Production'
-          package: .
-          
+          # --- CORRECTION 2 : On pointe vers le dossier backend ---
+          package: ./backend
