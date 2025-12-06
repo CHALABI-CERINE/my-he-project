@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { initSEALAndKeys, encryptData, decryptResult } from '../he_client';
+import { initSEALAndKeys, encryptBatch, decryptResult } from '../he_client';
 import { ENDPOINTS } from '../config'; // <--- Important pour Azure
 import axios from 'axios';
 
@@ -128,7 +128,7 @@ export default function Demo() {
 
       const encryptedChunks = [];
       for(let i=0; i<demoLimit; i++) {
-        const b64 = encryptData([nums[i]]);
+        const b64 = encryptBatch([nums[i]]);
         encryptedChunks.push({ index: i, ciphertext: b64 });
       }
       addLog(`Chiffrement terminé.`, "success");
