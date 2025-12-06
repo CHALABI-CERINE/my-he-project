@@ -28,9 +28,7 @@ export default function App() {
         {/* Outil Spécifique : Optimiseur */}
         <Route path="/optimizer" element={<Optimizer />} />
         <Route path="/generator" element={<DataGenerator />} />
-
-
-          <Route path="/precision-lab" element={<PrecisionLab />} />
+        <Route path="/precision-lab" element={<PrecisionLab />} />
       </Routes>
       
 
