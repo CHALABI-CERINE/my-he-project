@@ -2,15 +2,11 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
-
-
-
+// https://vitejs.dev/config/
 export default defineConfig({
- plugins: [
-    react()],
-  base: "my-he-project",  // <--- AJOUTE CETTE LIGNE (avec les slashs)
+  plugins: [
+    react(),
     nodePolyfills({
-      // Ceci est vital pour SEAL
       globals: {
         Buffer: true,
         global: true,
@@ -19,7 +15,7 @@ export default defineConfig({
       protocolImports: true,
     }),
   ],
-  // Optimisation pour forcer le chargement de SEAL
+  base: "/my-he-project/", // <--- C'est ICI que c'est important (avec les slashs /)
   optimizeDeps: {
     include: ['node-seal'],
   }
