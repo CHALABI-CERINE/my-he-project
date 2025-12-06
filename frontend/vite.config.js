@@ -2,7 +2,11 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
-// https://vitejs.dev/config/
+// ⚠️ REMPLACEZ 'nom-de-votre-repo' PAR LE VRAI NOM DE VOTRE DÉPÔT GITHUB
+// Exemple : si votre url est https://chalabi-cerine.github.io/secure-he-app/
+// Alors base doit être '/secure-he-app/'
+const REPO_NAME = "/nom-de-votre-repo/"; 
+
 export default defineConfig({
   plugins: [
     react(),
@@ -15,8 +19,13 @@ export default defineConfig({
       protocolImports: true,
     }),
   ],
-  base: "/my-he-project/", // <--- C'est ICI que c'est important (avec les slashs /)
+  // Important pour GitHub Pages
+  base: REPO_NAME, 
+  build: {
+    target: 'esnext', // Indispensable pour le support Top-Level Await / WASM
+    outDir: 'dist',
+  },
   optimizeDeps: {
-    include: ['node-seal'],
+    exclude: ['node-seal'] // Souvent mieux d'exclure le WASM de l'optimisation pure
   }
 });
