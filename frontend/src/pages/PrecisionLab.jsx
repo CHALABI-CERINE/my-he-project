@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { initSEALAndKeys, encryptBatch, decryptResult } from '../he_client';
 
+const DEFAULT_TEST_VALUE = 123.456789;
+const SCALE_VALUES = [Math.pow(2, 20), Math.pow(2, 30), Math.pow(2, 40), Math.pow(2, 50)];
+
 export default function PrecisionLab() {
   const [status, setStatus] = useState("Initialisation...");
   const [results, setResults] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
-  const [testValue, setTestValue] = useState(123.456789);
+  const [testValue, setTestValue] = useState(DEFAULT_TEST_VALUE);
 
   useEffect(() => {
     initSEALAndKeys().then(ok => {
@@ -23,9 +26,8 @@ export default function PrecisionLab() {
     setResults([]);
     
     const testResults = [];
-    const scales = [Math.pow(2, 20), Math.pow(2, 30), Math.pow(2, 40), Math.pow(2, 50)];
     
-    for (const scale of scales) {
+    for (const scale of SCALE_VALUES) {
       try {
         // Encrypt value with specific scale
         const encrypted = await encryptBatch([testValue], scale);
@@ -106,7 +108,7 @@ export default function PrecisionLab() {
               value={testValue}
               onChange={(e) => {
                 const val = parseFloat(e.target.value);
-                setTestValue(isNaN(val) || val === 0 ? 123.456789 : val);
+                setTestValue(isNaN(val) || val === 0 ? DEFAULT_TEST_VALUE : val);
               }}
               style={{
                 width: '100%',
@@ -214,7 +216,7 @@ export default function PrecisionLab() {
                   Le compromis optimal dépend de votre cas d'usage et de la précision requise
                 </li>
                 <li>
-                  Une erreur relative {'<'} 0.01% est généralement considérée comme excellente
+                  Une erreur relative &lt; 0.01% est généralement considérée comme excellente
                 </li>
               </ul>
             </div>
