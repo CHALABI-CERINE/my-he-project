@@ -1,25 +1,23 @@
 import SEAL from 'node-seal';
 
+// Variables globales au module
 let seal = null;
 let context = null;
-let keyGenerator = null;
-let secretKey = null;
-let publicKey = null;
 let encryptor = null;
 let decryptor = null;
 let ckksEncoder = null;
-let evaluator = null;
+// let keyGenerator = null; // Pas strictement nécessaire en global si non réutilisé
+// let evaluator = null;    // Pas nécessaire côté client pour juste chiffrer
 
-/**
- * Initialise la librairie SEAL (WASM), configure le contexte CKKS et génère les clés.
- * @param {number} polyModulusDegree - Degré du polynôme (défaut 8192)
- * @param {number} scaleBits - Précision en bits (défaut 40)
- * @returns {Promise<boolean>} - true si succès, false sinon
- */
 export async function initSEALAndKeys(polyModulusDegree = 8192, scaleBits = 40) {
     try {
-        // Charge le module WASM
+        console.log("Initialisation de SEAL...");
         const _seal = await SEAL();
+        
+        // Vérification critique : l'objet SEAL est-il valide ?
+        if (!_seal) {
+            throw new Error("L'initialisation de WebAssembly SEAL a échoué (objet null).");
+        }
         seal = _seal;
 
         const schemeType = seal.SchemeType.ckks;
@@ -28,29 +26,24 @@ export async function initSEALAndKeys(polyModulusDegree = 8192, scaleBits = 40) 
         const parms = seal.EncryptionParameters(schemeType);
         parms.setPolyModulusDegree(polyModulusDegree);
         
-        // Configuration des modules : [60, 40, 40, 60] est standard pour 8192
         const bitSizes = [60, scaleBits, scaleBits, 60];
         parms.setCoeffModulus(seal.CoeffModulus.Create(polyModulusDegree, Int32Array.from(bitSizes)));
 
-        // Crée le contexte
         context = seal.Context(parms, true, securityLevel);
 
         if (!context.parametersSet()) {
-            throw new Error("Paramètres de cryptage invalides ou insécurisés.");
+            throw new Error("Paramètres de cryptage invalides.");
         }
 
-        // Génération des clés
-        keyGenerator = seal.KeyGenerator(context);
-        secretKey = keyGenerator.secretKey();
-        publicKey = keyGenerator.createPublicKey();
-        
-        // Utilitaires
-        evaluator = seal.Evaluator(context);
+        const keyGenerator = seal.KeyGenerator(context);
+        const publicKey = keyGenerator.createPublicKey();
+        const secretKey = keyGenerator.secretKey(); // Gardé en mémoire pour le déchiffrement
+
         ckksEncoder = seal.CKKSEncoder(context);
         encryptor = seal.Encryptor(context, publicKey);
         decryptor = seal.Decryptor(context, secretKey);
 
-        console.log("🔒 SEAL Client Initialisé avec succès.");
+        console.log("🔒 SEAL Client Initialisé avec succès. API disponible:", Object.keys(seal).join(", "));
         return true;
     } catch (e) {
         console.error("Erreur critique init SEAL:", e);
@@ -58,56 +51,80 @@ export async function initSEALAndKeys(polyModulusDegree = 8192, scaleBits = 40) 
     }
 }
 
-/**
- * Chiffre un nombre ou un tableau de nombres en Base64 (CKKS)
- * @param {number|number[]} valueOrArray - Données à chiffrer
- * @param {number} scaleBits - Échelle (défaut 40)
- * @returns {string} - Ciphertext encodé en Base64
- */
 export function encryptData(valueOrArray, scaleBits = 40) {
-    if (!seal || !encryptor || !ckksEncoder) {
-        throw new Error("Erreur: SEAL n'est pas encore initialisé. Attendez le statut 'PRÊT'.");
-    }
-
-    // Normalise l'entrée en tableau
-    const inputArray = Array.isArray(valueOrArray) ? valueOrArray : [valueOrArray];
-
-    // Création des objets SEAL via la factory de l'instance
-    const plain = seal.Plaintext();
-    const scale = Math.pow(2, scaleBits);
-    
-    // 1. Encodage (Vecteur -> Plaintext)
-    ckksEncoder.encode(Float64Array.from(inputArray), scale, plain);
-
-    // 2. Chiffrement (Plaintext -> Ciphertext)
-    const cipher = seal.Ciphertext();
-    encryptor.encrypt(plain, cipher);
-
-    // 3. Export Base64
-    return cipher.save(); 
-}
-
-/**
- * Déchiffre une string Base64 et retourne le tableau de nombres flottants
- * @param {string} cipherBase64 - Ciphertext en Base64
- * @returns {Float64Array} - Tableau des valeurs déchiffrées
- */
-export function decryptResult(cipherBase64) {
-    if (!seal || !decryptor || !ckksEncoder) {
-        throw new Error("Erreur: SEAL n'est pas initialisé (decrypt impossible).");
-    }
+    // 1. Vérification de l'état
+    if (!seal) throw new Error("SEAL non chargé. Avez-vous attendu l'initialisation ?");
+    if (!encryptor || !ckksEncoder) throw new Error("Encodeur/Chiffreur non prêts.");
 
     try {
-        const cipher = seal.Ciphertext();
+        const inputArray = Array.isArray(valueOrArray) ? valueOrArray : [valueOrArray];
+        const floatArray = Float64Array.from(inputArray);
+        const scale = Math.pow(2, scaleBits);
+
+        // 2. Instanciation Robuste du Plaintext
+        let plain;
+        // Vérifie si Plaintext est une fonction (Factory pattern standard)
+        if (typeof seal.Plaintext === 'function') {
+            try {
+                plain = seal.Plaintext();
+            } catch (err) {
+                // Si l'appel direct échoue (ex: besoin de 'new'), on tente 'new'
+                console.warn("Appel factory Plaintext échoué, tentative avec new...", err);
+                plain = new seal.Plaintext();
+            }
+        } else {
+            // Si ce n'est pas une fonction, c'est peut-être un constructeur ou undefined
+            console.error("seal.Plaintext n'est pas une fonction standard. Type:", typeof seal.Plaintext);
+            throw new Error(`Impossible de créer un Plaintext. seal.Plaintext est ${typeof seal.Plaintext}`);
+        }
+
+        // 3. Encodage
+        ckksEncoder.encode(floatArray, scale, plain);
+
+        // 4. Chiffrement (Même logique robuste pour Ciphertext)
+        let cipher;
+        if (typeof seal.Ciphertext === 'function') {
+            try {
+                cipher = seal.Ciphertext();
+            } catch {
+                cipher = new seal.Ciphertext();
+            }
+        } else {
+             cipher = new seal.Ciphertext(); // Tentative désespérée
+        }
+
+        encryptor.encrypt(plain, cipher);
+
+        return cipher.save(); // Retourne Base64
+
+    } catch (e) {
+        console.error("Erreur dans encryptData:", e);
+        // On affiche les clés de seal pour aider au debug si ça plante encore
+        if(seal) console.log("Debug SEAL keys:", Object.keys(seal));
+        throw e;
+    }
+}
+
+export function decryptResult(cipherBase64) {
+    if (!seal || !decryptor) throw new Error("SEAL non initialisé");
+
+    try {
+        // Instanciation robuste
+        let cipher;
+        if(typeof seal.Ciphertext === 'function') cipher = seal.Ciphertext();
+        else cipher = new seal.Ciphertext();
+        
         cipher.load(context, cipherBase64);
 
-        const plain = seal.Plaintext();
+        let plain;
+        if(typeof seal.Plaintext === 'function') plain = seal.Plaintext();
+        else plain = new seal.Plaintext();
+
         decryptor.decrypt(cipher, plain);
 
-        const decoded = ckksEncoder.decode(plain);
-        return decoded;
+        return ckksEncoder.decode(plain);
     } catch (e) {
-        console.error("Erreur déchiffrement:", e);
+        console.error("Erreur decryptData:", e);
         throw e;
     }
 }
