@@ -132,7 +132,7 @@ export default function Demo() {
             if(data.error) throw new Error(data.error);
             addLog("Succès. Résultats chiffrés reçus.", "success");
 
-            // D. Déchiffrement et affichage (résultats stockés but not previewed)
+            // D. Déchiffrement (résultats stockés but not previewed)
             setActiveStep(3);
             addLog("🔓 Déchiffrement des résultats...", "warning");
             
@@ -145,8 +145,8 @@ export default function Demo() {
             const totalSum = normDecodedSum.reduce((a, b) => a + b, 0);
             const finalMean = normDecodedMean.reduce((a, b) => a + b, 0);
 
-            setResultSum(totalSum.toLocaleString(undefined, { maximumFractionDigits: 2 }));
-            setResultMean(finalMean.toLocaleString(undefined, { maximumFractionDigits: 4 }));
+            setResultSum(totalSum);
+            setResultMean(finalMean);
 
             addLog(`Terminé ! Données traitées et résultats reçus.`, "success");
 
@@ -155,6 +155,24 @@ export default function Demo() {
             addLog("Erreur de connexion ou de calcul: " + (e.message || e), "error");
         }
         setIsProcessing(false);
+    };
+
+    // Téléchargement des résultats (JSON)
+    const downloadResults = () => {
+        if(resultMean == null && resultSum == null) return;
+        const payload = {
+            mean: resultMean,
+            sum: resultSum,
+            count: fileInfo?.count || (inputData ? inputData.length : null),
+            timestamp: new Date().toISOString()
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (fileInfo?.name ? `${fileInfo.name}.results.json` : 'results.json');
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     return (
@@ -193,6 +211,21 @@ export default function Demo() {
                                 >
                                     {isProcessing ? "Traitement en cours..." : isGenerating ? "Génération..." : "Lancer & Upload 🚀"}
                                 </button>
+
+                                <button
+                                    onClick={downloadResults}
+                                    disabled={resultMean == null && resultSum == null}
+                                    style={{
+                                        padding: '10px 14px',
+                                        borderRadius: 6,
+                                        background: (resultMean == null && resultSum == null) ? '#334155' : '#10b981',
+                                        color: 'white',
+                                        border: 'none',
+                                        cursor: (resultMean == null && resultSum == null) ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    Télécharger résultats
+                                </button>
                             </div>
                             <div style={{textAlign:'center', color:'#9ca3af', fontSize:'.9rem', marginTop:8}}>
                                 {fileInfo ? `${fileInfo.name} — ${fileInfo.count?.toLocaleString?.() || ''} valeurs` : 'Aucun fichier chargé'}
@@ -214,8 +247,24 @@ export default function Demo() {
                         <div className="box-header">
                             <span className="box-title" style={{color: '#10b981'}}>3. Statut Résultats</span>
                         </div>
+                        {/* BOX 3: n'affiche que les résultats, avec défilement horizontal si besoin */}
                         <div className="box-content" style={{padding:12, color:'#9ca3af'}}>
-                            Moyenne: {resultMean || '--'} — Somme: {resultSum || '--'}
+                            <div style={{overflowX: 'auto', whiteSpace: 'nowrap', display: 'flex', gap: 16, alignItems: 'center'}}>
+                                <div style={{minWidth:220, display:'inline-block', padding:8, borderRadius:6, background:'#071027', color:'#a7f3d0'}}>
+                                    <div style={{fontSize:12, color:'#94a3b8'}}>MOYENNE</div>
+                                    <div style={{fontSize:20, fontWeight:800}}>{resultMean != null ? Number(resultMean).toLocaleString(undefined, { maximumFractionDigits: 4 }) : '--'}</div>
+                                </div>
+
+                                <div style={{minWidth:220, display:'inline-block', padding:8, borderRadius:6, background:'#071027', color:'#bfdbfe'}}>
+                                    <div style={{fontSize:12, color:'#94a3b8'}}>SOMME TOTALE</div>
+                                    <div style={{fontSize:20, fontWeight:800}}>{resultSum != null ? Number(resultSum).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '--'}</div>
+                                </div>
+
+                                <div style={{minWidth:160, display:'inline-block', padding:8, borderRadius:6, background:'#071027', color:'#c7c7c7'}}>
+                                    <div style={{fontSize:12, color:'#94a3b8'}}>COUNT</div>
+                                    <div style={{fontSize:16, fontWeight:700}}>{fileInfo?.count ? fileInfo.count.toLocaleString() : (inputData ? inputData.length.toLocaleString() : '--')}</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
