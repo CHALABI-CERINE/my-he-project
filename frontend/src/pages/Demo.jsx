@@ -132,21 +132,50 @@ export default function Demo() {
             if(data.error) throw new Error(data.error);
             addLog("Succès. Résultats chiffrés reçus.", "success");
 
-            // D. Déchiffrement (résultats stockés but not previewed)
+            // D. Déchiffrement et aggregation défensive
             setActiveStep(3);
             addLog("🔓 Déchiffrement des résultats...", "warning");
             
+            // Debug: log server payload
+            console.log('server response compute:', data);
+            addLog('Debug: réception résultats (voir console)', 'info');
+
             const decodedSumVector = await decryptResult(data.sumCiphertext);
             const decodedMeanVector = await decryptResult(data.meanCiphertext);
 
-            const normDecodedSum = Array.isArray(decodedSumVector) ? decodedSumVector : [decodedSumVector];
-            const normDecodedMean = Array.isArray(decodedMeanVector) ? decodedMeanVector : [decodedMeanVector];
+            // Debug: log decrypted raw vectors
+            console.log('decodedSumVector (raw):', decodedSumVector);
+            console.log('decodedMeanVector (raw):', decodedMeanVector);
+            addLog('Debug: déchiffrage effectué (voir console pour contenu)', 'info');
 
-            const totalSum = normDecodedSum.reduce((a, b) => a + b, 0);
-            const finalMean = normDecodedMean.reduce((a, b) => a + b, 0);
+            // Normalize to number[] safely
+            const normArray = (v) => {
+                if (v == null) return [];
+                const arr = Array.isArray(v) ? v : [v];
+                return arr.map(x => {
+                    const n = Number(x);
+                    return Number.isFinite(n) ? n : NaN;
+                }).filter(n => !Number.isNaN(n));
+            };
 
-            setResultSum(totalSum);
-            setResultMean(finalMean);
+            const normDecodedSum = normArray(decodedSumVector);
+            const normDecodedMean = normArray(decodedMeanVector);
+
+            // Heuristic: if all slots equal -> use that value (common when server replicates)
+            const deriveValue = (nums, preferAverage=false) => {
+                if (!nums || nums.length === 0) return null;
+                const allEqual = nums.every(n => n === nums[0]);
+                if (allEqual) return nums[0];
+                if (preferAverage) return nums.reduce((a,b)=>a+b,0) / nums.length;
+                return nums.reduce((a,b)=>a+b,0);
+            };
+
+            const totalSum = deriveValue(normDecodedSum, false);
+            const finalMean = deriveValue(normDecodedMean, true);
+
+            // Final safeguarding: if not numeric, set null
+            setResultSum(Number.isFinite(totalSum) ? totalSum : null);
+            setResultMean(Number.isFinite(finalMean) ? finalMean : null);
 
             addLog(`Terminé ! Données traitées et résultats reçus.`, "success");
 
