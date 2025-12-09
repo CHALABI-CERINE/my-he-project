@@ -132,7 +132,7 @@ export default function Demo() {
             if(data.error) throw new Error(data.error);
             addLog("Succès. Résultats chiffrés reçus.", "success");
 
-            // D. Déchiffrement et affichage (toujours fait mais pas montré ici)
+            // D. Déchiffrement et affichage (résultats stockés but not previewed)
             setActiveStep(3);
             addLog("🔓 Déchiffrement des résultats...", "warning");
             
@@ -194,8 +194,7 @@ export default function Demo() {
                                     {isProcessing ? "Traitement en cours..." : isGenerating ? "Génération..." : "Lancer & Upload 🚀"}
                                 </button>
                             </div>
-                            {/* Affichage minimal du fichier chargé (optionnel et discret) */}
-                            <div style={{textAlign:'center', color:'#9ca3af', fontSize:'.9rem'}}>
+                            <div style={{textAlign:'center', color:'#9ca3af', fontSize:'.9rem', marginTop:8}}>
                                 {fileInfo ? `${fileInfo.name} — ${fileInfo.count?.toLocaleString?.() || ''} valeurs` : 'Aucun fichier chargé'}
                             </div>
                         </div>
