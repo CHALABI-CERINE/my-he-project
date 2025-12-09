@@ -173,24 +173,6 @@ export default function Demo() {
         setIsProcessing(false);
     };
 
-    // Téléchargement des résultats (JSON) - bouton ajouté
-    const downloadResults = () => {
-        if(!resultMean && !resultSum) return;
-        const payload = {
-            mean: resultMean,
-            sum: resultSum,
-            count: fileInfo?.count || (inputData ? inputData.length : null),
-            timestamp: new Date().toISOString()
-        };
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = (fileInfo?.name ? `${fileInfo.name}.results.json` : 'results.json');
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-
     // Le return (IHM) reste identique au Code 2 pour la richesse visuelle.
     return (
         // ... (Le JSX complet de la version 2 pour l'IHM riche) ...
@@ -236,34 +218,17 @@ export default function Demo() {
                                 </div>
                             )}
 
-                            <div style={{marginTop: '1.5rem', display: 'flex', gap: 8}}>
-                                <button 
-                                    onClick={startProcess} 
-                                    disabled={isProcessing || !inputData || isGenerating}
-                                    style={{
-                                        background: isProcessing ? '#1f2937' : '#3b82f6', 
-                                        color: 'white', padding: '12px', borderRadius: '6px', border: 'none', 
-                                        cursor: (isProcessing || !inputData) ? 'default' : 'pointer', width: '100%', fontWeight: 'bold'
-                                    }}
-                                >
-                                    {isProcessing ? "Traitement en cours..." : isGenerating ? "Génération..." : "Lancer le Calcul Sécurisé 🚀"}
-                                </button>
-
-                                <button
-                                    onClick={downloadResults}
-                                    disabled={!resultMean && !resultSum}
-                                    style={{
-                                        padding: '12px',
-                                        borderRadius: 6,
-                                        background: (!resultMean && !resultSum) ? '#334155' : '#10b981',
-                                        color: 'white',
-                                        border: 'none',
-                                        cursor: (!resultMean && !resultSum) ? 'not-allowed' : 'pointer'
-                                    }}
-                                >
-                                    Télécharger résultats
-                                </button>
-                            </div>
+                            <button 
+                                onClick={startProcess} 
+                                disabled={isProcessing || !inputData || isGenerating}
+                                style={{
+                                    marginTop: '1.5rem', background: isProcessing ? '#1f2937' : '#3b82f6', 
+                                    color: 'white', padding: '12px', borderRadius: '6px', border: 'none', 
+                                    cursor: (isProcessing || !inputData) ? 'default' : 'pointer', width: '100%', fontWeight: 'bold'
+                                }}
+                            >
+                                {isProcessing ? "Traitement en cours..." : isGenerating ? "Génération..." : "Lancer le Calcul Sécurisé 🚀"}
+                            </button>
                         </div>
                     </div>
 
@@ -292,18 +257,14 @@ export default function Demo() {
                             <span className="box-title" style={{color: '#10b981'}}>3. Résultats (Déchiffrés)</span>
                             <span style={{fontSize: '1.2rem'}}>🔓</span>
                         </div>
-                        {/* Box 3: show only results, horizontal scroll if needed */}
-                        <div className="box-content" style={{flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12}}>
-                            <div style={{overflowX: 'auto', whiteSpace: 'nowrap', width: '100%'}}>
-                                <div style={{display: 'inline-block', minWidth: 220, marginRight: 12, padding: 12, background: '#071027', borderRadius: 6, color: '#a7f3d0', textAlign: 'left'}}>
-                                    <div style={{fontSize: '0.75rem', color: '#9ca3af', textTransform: 'uppercase'}}>MOYENNE</div>
-                                    <div style={{fontSize: '1.5rem', fontWeight: 800, marginTop: 6}}>{resultMean || "--"}</div>
-                                </div>
-
-                                <div style={{display: 'inline-block', minWidth: 220, marginRight: 12, padding: 12, background: '#071027', borderRadius: 6, color: '#bfdbfe', textAlign: 'left'}}>
-                                    <div style={{fontSize: '0.75rem', color: '#9ca3af', textTransform: 'uppercase'}}>SOMME TOTALE</div>
-                                    <div style={{fontSize: '1.5rem', fontWeight: 800, marginTop: 6}}>{resultSum || "--"}</div>
-                                </div>
+                        <div className="box-content" style={{flex: 1, display: 'flex', flexDirection: 'row', gap: '1rem', alignItems: 'center', justifyContent: 'center'}}>
+                            <div style={{flex: 1, textAlign: 'center', borderRight: '1px solid #374151'}}>
+                                <div style={{fontSize: '0.75rem', color: '#9ca3af', textTransform: 'uppercase', marginBottom: '5px'}}>MOYENNE</div>
+                                <div style={{fontSize: '2rem', fontWeight: '800', color: resultMean ? '#10b981' : '#374151'}}>{resultMean || "--"}</div>
+                            </div>
+                            <div style={{flex: 1, textAlign: 'center'}}>
+                                <div style={{fontSize: '0.75rem', color: '#9ca3af', textTransform: 'uppercase', marginBottom: '5px'}}>SOMME TOTALE</div>
+                                <div style={{fontSize: '2rem', fontWeight: '800', color: resultSum ? '#3b82f6' : '#374151'}}>{resultSum || "--"}</div>
                             </div>
                         </div>
                     </div>
