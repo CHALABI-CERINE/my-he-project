@@ -14,6 +14,11 @@ export default function Demo() {
     const [inputData, setInputData] = useState(null); 
     const [fileInfo, setFileInfo] = useState(null);  
     
+    // Previews & chiffrement local
+    const [plaintextPreview, setPlaintextPreview] = useState([]);
+    const [encryptedChunks, setEncryptedChunks] = useState([]); // { index, ciphertext }
+    const [showEncryptedPreview, setShowEncryptedPreview] = useState(false);
+
     // Résultats
     const [resultMean, setResultMean] = useState(null);
     const [resultSum, setResultSum] = useState(null);
@@ -47,14 +52,19 @@ export default function Demo() {
             try {
                 // Utilisation de Float64Array pour la performance
                 const data = new Float64Array(count);
-                for(let i=0; i<count; i++) data[i] = (Math.random() * 1000).toFixed(2);
+                for(let i=0; i<count; i++) data[i] = Number((Math.random() * 1000).toFixed(2)); // <-- Number() pour éviter string
                 
                 setInputData(data); // Stocke le tableau binaire
                 setFileInfo({ 
-                    name: `generated_bigdata_${count/1000}k.bin`, 
+                    name: `generated_bigdata_${count/1000}k`, 
                     size: "RAM", 
                     count: count 
                 });
+
+                // Preview des premières valeurs
+                setPlaintextPreview(Array.from(data.slice(0, 20)));
+                setEncryptedChunks([]);
+                setShowEncryptedPreview(false);
 
                 setResultMean(null);
                 setResultSum(null);
@@ -77,6 +87,8 @@ export default function Demo() {
         setResultMean(null);
         setResultSum(null);
         setActiveStep(1);
+        setEncryptedChunks([]);
+        setShowEncryptedPreview(false);
 
         addLog(`Analyse : ${file.name}...`, "warning");
         
@@ -89,14 +101,41 @@ export default function Demo() {
 
                 if (numsArray.length === 0) throw new Error("Aucune donnée valide.");
 
-                setInputData(new Float64Array(numsArray)); // Stocke en Float64Array
+                const farr = new Float64Array(numsArray);
+                setInputData(farr); // Stocke en Float64Array
                 setFileInfo({ name: file.name, size: (file.size/1024).toFixed(2) + " KB", count: numsArray.length });
+                setPlaintextPreview(Array.from(farr.slice(0, 20)));
                 addLog(`Succès. ${numsArray.length} entrées chargées.`, "success");
             } catch(err) {
                 addLog(`Erreur lecture: ${err.message}`, "error");
             }
         };
         reader.readAsText(file);
+    };
+
+    // --- Helpers de téléchargement (Avant / Après) ---
+    const downloadPlaintext = () => {
+        if(!inputData) return;
+        const csv = Array.from(inputData).join('\n');
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (fileInfo?.name || 'data') + '.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const downloadEncrypted = () => {
+        if(encryptedChunks.length === 0) return;
+        const payload = { meta: { originalName: fileInfo?.name || null, count: inputData?.length || 0 }, chunks: encryptedChunks };
+        const blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (fileInfo?.name || 'data') + '.encrypted.json';
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     // --- Processus Global (Optimisé pour la Cloud) ---
@@ -106,6 +145,8 @@ export default function Demo() {
         setResultMean(null);
         setResultSum(null);
         setActiveStep(1);
+        setEncryptedChunks([]);
+        setShowEncryptedPreview(false);
 
         try {
             const dataToProcess = inputData;
@@ -114,15 +155,19 @@ export default function Demo() {
             // A. CHIFFREMENT PAR LOTS (Code 1: Efficacité maximale)
             addLog("🔒 Chiffrement par lots (Client Side)...", "warning");
             const BATCH_SIZE = getBatchSize(); 
-            const encryptedChunks = [];
+            const localEncrypted = [];
 
             for(let i=0; i < dataToProcess.length; i += BATCH_SIZE) {
                 // Utilise le sous-tableau pour l'encodage
                 const chunk = dataToProcess.subarray(i, i + BATCH_SIZE);
-                const b64 = encryptBatch(chunk);
-                encryptedChunks.push({ index: encryptedChunks.length, ciphertext: b64 });
+                // NOTE: encryptBatch peut être asynchrone ; on await pour être sûr
+                const b64 = await encryptBatch(chunk);
+                localEncrypted.push({ index: localEncrypted.length, ciphertext: b64 });
+                // garder un aperçu du premier chunk chiffré
+                if (localEncrypted.length === 1) setEncryptedChunks([localEncrypted[0]]);
             }
-            addLog(`Chiffrement terminé. ${encryptedChunks.length} paquets chiffrés générés.`, "success");
+            setEncryptedChunks(localEncrypted);
+            addLog(`Chiffrement terminé. ${localEncrypted.length} paquets chiffrés générés.`, "success");
 
             // B. UPLOAD OPTIMISÉ (Utilise Axios avec parallèle)
             setActiveStep(2);
@@ -133,8 +178,8 @@ export default function Demo() {
             
             // 2. Upload par lots de 5 requêtes simultanées
             const UPLOAD_BATCH_SIZE = 5; 
-            for (let i = 0; i < encryptedChunks.length; i += UPLOAD_BATCH_SIZE) {
-                const batch = encryptedChunks.slice(i, i + UPLOAD_BATCH_SIZE);
+            for (let i = 0; i < localEncrypted.length; i += UPLOAD_BATCH_SIZE) {
+                const batch = localEncrypted.slice(i, i + UPLOAD_BATCH_SIZE);
                 // Utilise Promise.all pour l'envoi parallèle
                 await Promise.all(
                     batch.map(c => axios.post(ENDPOINTS.UPLOAD_CHUNK, c))
@@ -154,21 +199,26 @@ export default function Demo() {
             setActiveStep(3);
             addLog("🔓 Déchiffrement des résultats...", "warning");
             
-            const decodedSumVector = decryptResult(data.sumCiphertext);
-            const decodedMeanVector = decryptResult(data.meanCiphertext);
+            const decodedSumVector = await decryptResult(data.sumCiphertext);
+            const decodedMeanVector = await decryptResult(data.meanCiphertext);
+
+            // Normaliser : decryptResult peut retourner un array ou un nombre
+            const normDecodedSum = Array.isArray(decodedSumVector) ? decodedSumVector : [decodedSumVector];
+            const normDecodedMean = Array.isArray(decodedMeanVector) ? decodedMeanVector : [decodedMeanVector];
 
             // Sommation des slots du vecteur pour le résultat final (requis par CKKS)
-            const totalSum = decodedSumVector.reduce((a, b) => a + b, 0);
-            const finalMean = decodedMeanVector.reduce((a, b) => a + b, 0); // La moyenne est souvent déjà calculée et répliquée dans un slot par le serveur.
+            const totalSum = normDecodedSum.reduce((a, b) => a + b, 0);
+            const finalMean = normDecodedMean.reduce((a, b) => a + b, 0); // La moyenne peut être répliquée dans le vecteur par le serveur.
 
             setResultSum(totalSum.toLocaleString(undefined, { maximumFractionDigits: 2 }));
             setResultMean(finalMean.toLocaleString(undefined, { maximumFractionDigits: 4 }));
 
             addLog(`Terminé ! Données révélées.`, "success");
+            setShowEncryptedPreview(true);
 
         } catch(e) {
             console.error(e);
-            addLog("Erreur de connexion ou de calcul: " + e.message, "error");
+            addLog("Erreur de connexion ou de calcul: " + (e.message || e), "error");
         }
         setIsProcessing(false);
     };
@@ -218,17 +268,27 @@ export default function Demo() {
                                 </div>
                             )}
 
-                            <button 
-                                onClick={startProcess} 
-                                disabled={isProcessing || !inputData || isGenerating}
-                                style={{
-                                    marginTop: '1.5rem', background: isProcessing ? '#1f2937' : '#3b82f6', 
-                                    color: 'white', padding: '12px', borderRadius: '6px', border: 'none', 
-                                    cursor: (isProcessing || !inputData) ? 'default' : 'pointer', width: '100%', fontWeight: 'bold'
-                                }}
-                            >
-                                {isProcessing ? "Traitement en cours..." : isGenerating ? "Génération..." : "Lancer le Calcul Sécurisé 🚀"}
-                            </button>
+                            <div style={{display:'flex', gap:8, marginTop:12}}>
+                                <button 
+                                    onClick={startProcess} 
+                                    disabled={isProcessing || !inputData || isGenerating}
+                                    style={{
+                                        background: isProcessing ? '#1f2937' : '#3b82f6', 
+                                        color: 'white', padding: '12px', borderRadius: '6px', border: 'none',
+                                        cursor: (isProcessing || !inputData) ? 'default' : 'pointer', fontWeight: 'bold'
+                                    }}
+                                >
+                                    {isProcessing ? "Traitement en cours..." : isGenerating ? "Génération..." : "Lancer le Calcul Sécurisé 🚀"}
+                                </button>
+
+                                <button onClick={downloadPlaintext} disabled={!inputData} style={{padding:'12px', borderRadius:6}}>
+                                    Télécharger - Avant (CSV)
+                                </button>
+
+                                <button onClick={downloadEncrypted} disabled={encryptedChunks.length===0} style={{padding:'12px', borderRadius:6}}>
+                                    Télécharger - Chiffré (JSON)
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -267,6 +327,31 @@ export default function Demo() {
                                 <div style={{fontSize: '2rem', fontWeight: '800', color: resultSum ? '#3b82f6' : '#374151'}}>{resultSum || "--"}</div>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Aperçus */}
+                    <div style={{marginTop:16}}>
+                        <h4>Aperçu (Avant chiffrement)</h4>
+                        <pre style={{maxHeight:120, overflow:'auto', background:'#0f172a', color:'#e5e7eb', padding:10}}>
+                            {plaintextPreview.length ? plaintextPreview.join(', ') : '— aucune preview —'}
+                        </pre>
+
+                        <h4 style={{marginTop:12}}>Aperçu (Chiffré)</h4>
+                        {encryptedChunks.length === 0 ? (
+                            <div style={{color:'#94a3b8'}}>Aucun chunk chiffré encore.</div>
+                        ) : (
+                            <>
+                                <div style={{color:'#94a3b8'}}>Chunks totaux: {encryptedChunks.length}</div>
+                                <button onClick={() => setShowEncryptedPreview(s => !s)} style={{marginTop:8}}>
+                                    {showEncryptedPreview ? 'Masquer preview chiffré' : 'Afficher preview chiffré (1er chunk)'}
+                                </button>
+                                {showEncryptedPreview && encryptedChunks[0] && (
+                                    <pre style={{maxHeight:200, overflow:'auto', background:'#0f172a', color:'#e5e7eb', padding:10}}>
+                                        {typeof encryptedChunks[0].ciphertext === 'string' ? encryptedChunks[0].ciphertext : JSON.stringify(encryptedChunks[0].ciphertext, null, 2)}
+                                    </pre>
+                                )}
+                            </>
+                        )}
                     </div>
 
                 </div>
