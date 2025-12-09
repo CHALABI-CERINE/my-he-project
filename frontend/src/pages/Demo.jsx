@@ -379,8 +379,18 @@ export default function Demo() {
             {/* STYLE POUR BOUTONS GENERATE */}
             <style>{`
                 .btn-gen { background: #374151; border: 1px solid #4b5563; color: #e5e7eb; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; transition: background 0.2s; }
-                .btn-gen:hover { background: #4b5563; }
-            `}</style>
+                .btn-gen:hover { background: #4b5563;}
+            .body 
+            {
+  width: 100%;             
+  overflow-x: auto;
+  overflow-y: hidden;        
+  white-space: nowrap;      
+}
+
+            
+            
+            ` }</style>
 
         </div>
     );
